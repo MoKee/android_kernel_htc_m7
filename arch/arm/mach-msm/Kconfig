@@ -2292,11 +2292,6 @@ config MSM_ETM
 	help
 	  Enables embedded trace collection on MSM8660
 
-config MSM_SLEEP_STATS
-	bool "Enable exporting of MSM sleep stats to userspace"
-	depends on CPU_IDLE
-	default n
-
 config MSM_SLEEP_STATS_DEVICE
 	bool "Enable exporting of MSM sleep device stats to userspace"
 
@@ -2652,6 +2647,7 @@ config MSM_HSIC_SYSMON_TEST
 config MACH_MONARUDO
 	depends on ARCH_APQ8064
 	bool "APQ8064 MONARUDO"
+	select FB_MSM_MIPI_DSI
 	help
 	  Support for the HTC APQ8064 MONARUDO.
 

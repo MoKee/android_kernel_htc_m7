@@ -305,6 +305,13 @@ static int msm_mctl_cmd(struct msm_cam_media_controller *p_mctl,
 		}
 		cdata.is_af_supported = 0;
 		cdata.is_ois_supported = 0;
+		cdata.is_cal_supported = 0; 
+#ifndef CONFIG_MACH_MONARUDO
+		cdata.small_step_damping = 0;
+		cdata.medium_step_damping = 0;
+		cdata.big_step_damping = 0;
+		cdata.is_af_infinity_supported = 1;
+#endif
 		rc = 0;
 
 		if (p_mctl->actctrl->a_config) {
@@ -316,6 +323,14 @@ static int msm_mctl_cmd(struct msm_cam_media_controller *p_mctl,
 
 			cdata.is_af_supported = 1;
 			cdata.is_ois_supported = p_mctl->actctrl->is_ois_supported;
+			cdata.is_cal_supported = p_mctl->actctrl->is_cal_supported; 
+#ifndef CONFIG_MACH_MONARUDO
+			cdata.small_step_damping = p_mctl->actctrl->small_step_damping;
+			cdata.medium_step_damping = p_mctl->actctrl->medium_step_damping;
+			cdata.big_step_damping = p_mctl->actctrl->big_step_damping;
+			cdata.is_af_infinity_supported = p_mctl->actctrl->is_af_infinity_supported;
+#endif
+
 			cdata.cfg.cam_name =
 				(enum af_camera_name)sdata->
 				actuator_info->cam_name;
@@ -349,6 +364,8 @@ static int msm_mctl_cmd(struct msm_cam_media_controller *p_mctl,
 			}
 			act_data.is_af_supported = 0;
 			act_data.is_ois_supported = 0;
+			act_data.is_cal_supported = 0; 
+
 			rc = copy_to_user((void *)argp,
 					 &act_data,
 					 sizeof(struct msm_actuator_cfg_data));
@@ -419,7 +436,7 @@ static int msm_mctl_cmd(struct msm_cam_media_controller *p_mctl,
 		else
 			rc = p_mctl->isp_sdev->isp_config(p_mctl, cmd, arg);
 		break;
-			
+
 	case MSM_CAM_IOCTL_SET_PERF_LOCK: {
 		int perf_lock_enable;
 		if (copy_from_user(&perf_lock_enable, argp, sizeof(perf_lock_enable))) {
@@ -606,11 +623,6 @@ static int msm_mctl_open(struct msm_cam_media_controller *p_mctl,
 		
 		
 
-		
-		if (p_mctl->sdata->camera_on_check_vcm)
-			p_mctl->sdata->camera_on_check_vcm();
-		
-
 		csid_core = camdev->csid_core;
 		rc = msm_mctl_register_subdevs(p_mctl, csid_core);
 		if (rc < 0) {
@@ -652,7 +664,7 @@ static int msm_mctl_open(struct msm_cam_media_controller *p_mctl,
 		if (p_mctl->isp_sdev && p_mctl->isp_sdev->isp_open) {
 			rc = p_mctl->isp_sdev->isp_open(
 				p_mctl->isp_sdev->sd, p_mctl);
-	
+
 			if (rc < 0) {
 				pr_err("%s: isp init failed: %d\n",
 					__func__, rc);
@@ -695,6 +707,11 @@ static int msm_mctl_open(struct msm_cam_media_controller *p_mctl,
 		rc = msm_camio_probe_on(s_ctrl);
 		if (rc)
 			pr_info("%s msm_camio_probe_on rc(%d)\n", __func__, rc);
+
+		
+		if(p_mctl->actctrl->actrl_vcm_on_mut)
+			mutex_lock(p_mctl->actctrl->actrl_vcm_on_mut);
+		
 
 		if (p_mctl->sdata->use_rawchip) {
 #ifdef CONFIG_RAWCHIP
@@ -744,6 +761,11 @@ static int msm_mctl_open(struct msm_cam_media_controller *p_mctl,
 			goto act_power_up_failed;
 		}
 
+		
+		if(p_mctl->actctrl->actrl_vcm_on_mut)
+			mutex_unlock(p_mctl->actctrl->actrl_vcm_on_mut);
+		
+
 		if (camdev->is_ispif) {
 			pm_qos_add_request(&p_mctl->pm_qos_req_list,
 				PM_QOS_CPU_DMA_LATENCY, PM_QOS_DEFAULT_VALUE);
@@ -752,7 +774,7 @@ static int msm_mctl_open(struct msm_cam_media_controller *p_mctl,
 		}
 		p_mctl->apps_id = apps_id;
 		p_mctl->opencnt++;
-		
+
 	} else {
 		D("%s: camera is already open", __func__);
 	}
@@ -801,6 +823,12 @@ register_sdev_failed:
 	wake_unlock(&p_mctl->wake_lock_suspend);
 
 	mutex_unlock(&p_mctl->lock);
+
+	
+	if(p_mctl->actctrl->actrl_vcm_on_mut)
+		mutex_unlock(p_mctl->actctrl->actrl_vcm_on_mut);
+	
+
 	return rc;
 }
 
@@ -849,10 +877,18 @@ static int msm_mctl_release(struct msm_cam_media_controller *p_mctl)
 			VIDIOC_MSM_CSIPHY_RELEASE, NULL);
 	}
 
+	
+	if(p_mctl->actctrl->actrl_vcm_on_mut)
+		mutex_lock(p_mctl->actctrl->actrl_vcm_on_mut);
+
+	if(p_mctl->actctrl->actrl_vcm_wa_camera_on)
+		*p_mctl->actctrl->actrl_vcm_wa_camera_on = STATUS_OFF;
+	
+
 	if (p_mctl->actctrl->a_power_down)
 		p_mctl->actctrl->a_power_down(
 			p_mctl->sdata->actuator_info);
-	
+
 	if (p_mctl->sdata->use_rawchip) {
 #ifdef CONFIG_RAWCHIP
 		rawchip_release();
@@ -871,6 +907,12 @@ static int msm_mctl_release(struct msm_cam_media_controller *p_mctl)
 	
 
 	v4l2_subdev_call(p_mctl->sensor_sdev, core, s_power, 0);
+
+	
+	if(p_mctl->actctrl->actrl_vcm_on_mut)
+		mutex_unlock(p_mctl->actctrl->actrl_vcm_on_mut);
+	
+
 	if (camdev->is_ispif) {
 		pm_qos_update_request(&p_mctl->pm_qos_req_list,
 				PM_QOS_DEFAULT_VALUE);
@@ -982,6 +1024,11 @@ int msm_mctl_init(struct msm_cam_v4l2_device *pcam)
 	pmctl->sdata = pcam->sdata;
 
 #ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
+	if (pmctl->client) {
+		pr_info("%s: pmctl->client(%p) not null\n", __func__, (void*)(pmctl->client));
+		ion_client_destroy(pmctl->client);
+		pmctl->client = NULL;
+	}
 	pmctl->client = msm_ion_client_create(-1, "camera");
 	kref_init(&pmctl->refcount);
 #endif
@@ -1067,7 +1114,7 @@ static int msm_mctl_dev_open(struct file *f)
 		return rc;
 	}
 
-	D("%s active %d\n", __func__, pcam->mctl_node.active);		
+	D("%s active %d\n", __func__, pcam->mctl_node.active);
 	rc = msm_setup_v4l2_event_queue(&pcam_inst->eventHandle,
 					pcam->mctl_node.pvdev);
 	if (rc < 0) {
@@ -1149,7 +1196,7 @@ static int msm_mctl_dev_close(struct file *f)
 			return rc;
 		}
 		pmctl = NULL;
-	}	
+	}
 	pcam_inst->streamon = 0;
 	pcam->mctl_node.dev_inst_map[pcam_inst->image_mode] = NULL;
 	if (pcam_inst->vbqueue_initialized)

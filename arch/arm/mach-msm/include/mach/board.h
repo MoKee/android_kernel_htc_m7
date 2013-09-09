@@ -313,7 +313,11 @@ enum msm_camera_pixel_order_default {
 	MSM_CAMERA_PIXEL_ORDER_BG,
 	MSM_CAMERA_PIXEL_ORDER_GB,
 };
-
+enum sensor_mount_angle {
+	ANGLE_90,
+	ANGLE_180,
+	ANGLE_270,
+};
 struct msm_camera_sensor_platform_info {
 	int mount_angle;
 	int sensor_reset;
@@ -332,6 +336,8 @@ struct msm_camera_sensor_platform_info {
 	enum msm_camera_pixel_order_default pixel_order_default;	
 	enum sensor_flip_mirror_info mirror_flip;
 	void *privacy_light_info;
+	enum sensor_mount_angle sensor_mount_angle; 
+	bool ews_enable;
 	
 };
 
@@ -358,6 +364,17 @@ struct msm_actuator_info {
 	
 	
 	int otp_diviation;
+	
+	
+	void (*vcm_wa_vreg_on) (void);
+	void (*vcm_wa_vreg_off) (void);
+	
+	
+	void (*oisbinder_i2c_add_driver) (void* i2c_client);
+	void (*oisbinder_open_init) (void);
+	void (*oisbinder_power_down) (void);
+	int32_t (*oisbinder_act_set_ois_mode) (int ois_mode);
+	int32_t (*oisbinder_mappingTbl_i2c_write) (int startup_mode, void * sensor_actuator_info);
 	
 };
 
@@ -409,7 +426,6 @@ struct msm_camera_sensor_info {
 	int (*camera_power_on)(void);
 	int (*camera_power_off)(void);
 	void (*camera_yushanii_probed)(enum htc_camera_image_type_board);
-	void (*camera_on_check_vcm)(void); 
 	enum htc_camera_image_type_board htc_image;	
 	int use_rawchip;
 	int hdr_mode;
@@ -543,6 +559,8 @@ struct msm_panel_common_pdata {
 	u32 splash_screen_size;
 	char mdp_iommu_split_domain;
 	u32 avtimer_phy;
+	int (*mdp_color_enhance)(void);
+	int (*mdp_gamma)(void);
 };
 
 
@@ -627,13 +645,6 @@ struct msm_fb_platform_data {
 	char ext_panel_name[PANEL_NAME_MAX_LEN];
 };
 
-#define HDMI_VFRMT_640x480p60_4_3 0
-#define HDMI_VFRMT_720x480p60_16_9 2
-#define HDMI_VFRMT_1280x720p60_16_9 3
-#define HDMI_VFRMT_720x576p50_16_9 17
-#define HDMI_VFRMT_1920x1080p24_16_9 31
-#define HDMI_VFRMT_1920x1080p30_16_9 33
-
 typedef struct
 {
 	uint8_t format;
@@ -652,6 +663,7 @@ struct msm_hdmi_platform_data {
 	int (*gpio_config)(int on);
 	int (*init_irq)(void);
 	bool (*check_hdcp_hw_support)(void);
+	bool (*source)(void);
 	bool is_mhl_enabled;
 	mhl_driving_params *driving_params;
 	int dirving_params_count;

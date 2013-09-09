@@ -366,7 +366,7 @@ static struct msm_camera_i2c_reg_conf ar0260_recommend_settings[] = {
 { 0x3C40, 0xAC34},	
 {0x301C, 0x0102},
 {0xffff,50},
-#if 0
+#ifndef CONFIG_RAWCHIPII
 { 0x3C40, 0xAC36},	
 {0x301C, 0x0},
 #else
@@ -1483,8 +1483,10 @@ int32_t ar0260_power_up(struct msm_sensor_ctrl_t *s_ctrl)
 	}
 
 #ifdef CONFIG_RAWCHIPII
-	Ilp0100_enableIlp0100SensorClock(SENSOR_1);
-	mdelay(35);	
+    if (sdata->htc_image == HTC_CAMERA_IMAGE_YUSHANII_BOARD) {
+    	Ilp0100_enableIlp0100SensorClock(SENSOR_1);
+        mdelay(35);	
+	}
 #endif
 
 #if 0	

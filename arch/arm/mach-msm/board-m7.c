@@ -117,6 +117,7 @@
 #endif
 
 #ifdef CONFIG_FB_MSM_HDMI_MHL
+#include <video/msm_hdmi_modes.h>
 #include <mach/mhl.h>
 #endif
 
@@ -854,13 +855,14 @@ static struct platform_device mdm_8064_device = {
 
 #ifdef CONFIG_BT
 static struct msm_serial_hs_platform_data msm_uart_dm6_pdata = {
+#ifndef CONFIG_SERIAL_MSM_HS_BRCM
 	.config_gpio		= 4,
 	.uart_tx_gpio		= BT_UART_TX,
 	.uart_rx_gpio		= BT_UART_RX,
 	.uart_cts_gpio		= BT_UART_CTSz,
 	.uart_rfr_gpio		= BT_UART_RTSz,
-
-#ifdef CONFIG_MSM_SERIAL_HS_BRCM
+#endif
+#ifdef CONFIG_SERIAL_MSM_HS_BRCM
 	.inject_rx_on_wakeup = 0,
 
 	.bt_wakeup_pin = PM8921_GPIO_PM_TO_SYS(BT_WAKE),
@@ -923,6 +925,7 @@ static struct htc_battery_platform_data htc_battery_pdev_data = {
 	.critical_alarm_vol_cols = sizeof(critical_alarm_voltage_mv) / sizeof(int),
 	.overload_vol_thr_mv = 4000,
 	.overload_curr_thr_ma = 0,
+	.smooth_chg_full_delay_min = 1,
 
 	.icharger.name = "pm8921",
 	.icharger.set_limit_charge_enable = pm8921_limit_charge_enable,
@@ -1098,6 +1101,8 @@ struct pm8921_bms_battery_data  bms_battery_data_id_1 = {
 	.rbatt_est_ocv_lut	= &rbatt_est_ocv_id_1,
 	.default_rbatt_mohm	= 250,
 	.delta_rbatt_mohm	= 0,
+	.level_ocv_update_stop_begin	= 10,
+	.level_ocv_update_stop_end	= 20,
 };
 
 
@@ -1211,6 +1216,8 @@ struct pm8921_bms_battery_data  bms_battery_data_id_2 = {
 	.rbatt_est_ocv_lut	= &rbatt_est_ocv_id_2,
 	.default_rbatt_mohm	= 250,
 	.delta_rbatt_mohm	= 0,
+	.level_ocv_update_stop_begin	= 10,
+	.level_ocv_update_stop_end	= 20,
 };
 
 static struct htc_battery_cell htc_battery_cells[] = {
@@ -2243,8 +2250,8 @@ static int synaptics_power_LPM(int on)
 			mutex_unlock(&tp_lock);
 			return rc;
 		}
-		pr_info("[TP] %s: leave LMP mode\n", __func__);
-		msleep(10);
+		pr_info("[TP] %s: leave LPM mode\n", __func__);
+		usleep(10);
 	}
 	mutex_unlock(&tp_lock);
 	return rc;
@@ -2267,6 +2274,7 @@ static struct synaptics_i2c_rmi_platform_data syn_ts_3k_data[] = {
 		.tw_pin_mask = 0x0088,
 		.sensor_id = SENSOR_ID_CHECKING_EN | 0x0,
 		.psensor_detection = 1,
+		.reduce_report_level = {60, 60, 50, 0, 0},
 		.virtual_key = m7_vk_data,
 		.lpm_power = synaptics_power_LPM,
 		.config = {0x33, 0x32, 0x00, 0x08, 0x00, 0x7F, 0x03, 0x1E,
@@ -2328,6 +2336,7 @@ static struct synaptics_i2c_rmi_platform_data syn_ts_3k_data[] = {
 		.tw_pin_mask = 0x0088,
 		.sensor_id = SENSOR_ID_CHECKING_EN | 0x80,
 		.psensor_detection = 1,
+		.reduce_report_level = {60, 60, 50, 0, 0},
 		.virtual_key = m7_vk_data,
 		.lpm_power = synaptics_power_LPM,
 		.config = {0x33, 0x32, 0x01, 0x08, 0x00, 0x7F, 0x03, 0x1E,
@@ -2389,6 +2398,7 @@ static struct synaptics_i2c_rmi_platform_data syn_ts_3k_data[] = {
 		.tw_pin_mask = 0x0088,
 		.sensor_id = SENSOR_ID_CHECKING_EN | 0x08,
 		.psensor_detection = 1,
+		.reduce_report_level = {60, 60, 50, 0, 0},
 		.virtual_key = m7_vk_data,
 		.lpm_power = synaptics_power_LPM,
 		.config = {0x33, 0x32, 0x02, 0x08, 0x00, 0x7F, 0x03, 0x1E,
@@ -3386,7 +3396,7 @@ static int capella_pl_sensor_lpm_power(uint8_t enable)
 			return rc;
 		}
 		pr_info("[PS][cm3629] %s: leave lmp,OK\n", __func__);
-		msleep(10);
+		usleep(10);
 	}
 	mutex_unlock(&pl_sensor_lock);
 	pr_info("[PS][cm3629] %s: pl_sensor_lock unlock 4\n", __func__);
@@ -3407,9 +3417,10 @@ static struct cm3629_platform_data cm36282_pdata_sk2 = {
 	.ps1_thd_set = 0x15,
 	.ps1_thd_no_cal = 0x90,
 	.ps1_thd_with_cal = 0xD,
+	.ps_th_add = 5,
 	.ps_calibration_rule = 1,
-	.ps_conf1_val = CM3629_PS_DR_1_320 | CM3629_PS_IT_1_6T |
-			CM3629_PS1_PERS_3,
+	.ps_conf1_val = CM3629_PS_DR_1_40 | CM3629_PS_IT_1_6T |
+			CM3629_PS1_PERS_2,
 	.ps_conf2_val = CM3629_PS_ITB_1 | CM3629_PS_ITR_1 |
 			CM3629_PS2_INT_DIS | CM3629_PS1_INT_DIS,
 	.ps_conf3_val = CM3629_PS2_PROL_32,
@@ -3443,9 +3454,10 @@ static struct cm3629_platform_data cm36282_pdata_r8 = {
 	.ps1_thd_set = 0x15,
 	.ps1_thd_no_cal = 0x90,
 	.ps1_thd_with_cal = 0xD,
+	.ps_th_add = 5,
 	.ps_calibration_rule = 1,
-	.ps_conf1_val = CM3629_PS_DR_1_320 | CM3629_PS_IT_1_6T |
-			CM3629_PS1_PERS_3,
+	.ps_conf1_val = CM3629_PS_DR_1_40 | CM3629_PS_IT_1_6T |
+			CM3629_PS1_PERS_2,
 	.ps_conf2_val = CM3629_PS_ITB_1 | CM3629_PS_ITR_1 |
 			CM3629_PS2_INT_DIS | CM3629_PS1_INT_DIS,
 	.ps_conf3_val = CM3629_PS2_PROL_32,
@@ -5277,7 +5289,11 @@ static void __init m7_common_init(void)
 	htc_BCM4335_wl_reg_init(WL_REG_ON);
 	bt_export_bd_address();
 	msm_uart_dm6_pdata.wakeup_irq = PM8921_GPIO_IRQ(PM8921_IRQ_BASE, BT_HOST_WAKE);
+#ifdef CONFIG_SERIAL_MSM_HS_BRCM
+	msm_device_uart_dm6.name = "msm_serial_hs_brcm";
+#else
 	msm_device_uart_dm6.name = "msm_serial_hs";
+#endif
 	msm_device_uart_dm6.dev.platform_data = &msm_uart_dm6_pdata;
 #endif
 
@@ -5362,12 +5378,10 @@ static void __init m7_common_init(void)
 #ifdef CONFIG_SUPPORT_USB_SPEAKER
 	pm_qos_add_request(&pm_qos_req_dma, PM_QOS_CPU_DMA_LATENCY, PM_QOS_DEFAULT_VALUE);
 #endif
-#if 1
 	if (get_kernel_flag() & KERNEL_FLAG_PM_MONITOR) {
 		htc_monitor_init();
 		htc_pm_monitor_init();
 	}
-#endif
 }
 
 static void __init m7_allocate_memory_regions(void)
